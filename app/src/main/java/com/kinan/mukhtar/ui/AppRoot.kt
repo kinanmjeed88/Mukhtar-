@@ -14,82 +14,63 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.navigation.NavHostController
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.currentBackStackEntryAsState
-import androidx.navigation.compose.rememberNavController
-import androidx.navigation.navArgument
-import androidx.navigation.NavType
 import com.kinan.mukhtar.ui.screens.*
 import com.kinan.mukhtar.vm.MainViewModel
 
-object Routes {
-    const val SETUP = "setup"
-    const val MAIN = "main"
-    const val PERSON_EDIT = "person_edit"
+/** شاشات التطبيق - تنقل بسيط بالحالة بدلاً من NavHost المتداخل */
+private sealed interface Screen {
+    data object Setup : Screen
+    data object Main : Screen
+    data class PersonEdit(val personId: Long) : Screen
 }
 
-sealed class BottomTab(val route: String, val label: String, val icon: ImageVector) {
-    data object Individuals : BottomTab("tab_individuals", "الأفراد", Icons.Filled.Person)
-    data object Families : BottomTab("tab_families", "العوائل", Icons.Filled.Group)
-    data object Residency : BottomTab("tab_residency", "تأييد سكن", Icons.Filled.Description)
-    data object Settings : BottomTab("tab_settings", "الإعدادات", Icons.Filled.Settings)
+sealed class BottomTab(val label: String, val icon: ImageVector) {
+    data object Individuals : BottomTab("الأفراد", Icons.Filled.Person)
+    data object Families : BottomTab("العوائل", Icons.Filled.Group)
+    data object Residency : BottomTab("تأييد سكن", Icons.Filled.Description)
+    data object Settings : BottomTab("الإعدادات", Icons.Filled.Settings)
 
     companion object { val all = listOf(Individuals, Families, Residency, Settings) }
 }
 
 @Composable
 fun AppRoot(viewModel: MainViewModel) {
-    val navController = rememberNavController()
     val setupComplete by viewModel.isSetupComplete.collectAsState()
 
-    // يجب تثبيت وجهة البداية مرة واحدة فقط.
-    // تغييرها بعد إنشاء NavHost يعيد بناء الرسم البياني ويسبب انهيار التطبيق.
-    val startDestination = rememberSaveable { mutableStateOf<String?>(null) }
+    // تُحسب مرة واحدة فقط ولا تتغير بعد ذلك
+    var screen by remember { mutableStateOf<Screen?>(null) }
 
     LaunchedEffect(setupComplete) {
-        if (startDestination.value == null && setupComplete != null) {
-            startDestination.value = if (setupComplete == true) Routes.MAIN else Routes.SETUP
+        if (screen == null && setupComplete != null) {
+            screen = if (setupComplete == true) Screen.Main else Screen.Setup
         }
     }
 
-    val start = startDestination.value
-    if (start == null) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-        return
-    }
+    when (val current = screen) {
+        null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator()
+        }
 
-    NavHost(navController = navController, startDestination = start) {
-        composable(Routes.SETUP) {
-            SetupScreen(viewModel) {
-                navController.navigate(Routes.MAIN) {
-                    popUpTo(Routes.SETUP) { inclusive = true }
-                    launchSingleTop = true
-                }
-            }
-        }
-        composable(Routes.MAIN) { MainScaffold(viewModel, navController) }
-        composable(
-            route = "${Routes.PERSON_EDIT}/{personId}",
-            arguments = listOf(navArgument("personId") { type = NavType.LongType })
-        ) { entry ->
-            AddEditPersonScreen(
-                viewModel = viewModel,
-                personId = entry.arguments?.getLong("personId") ?: 0L,
-                onDone = { navController.popBackStack() }
-            )
-        }
+        is Screen.Setup -> SetupScreen(viewModel) { screen = Screen.Main }
+
+        is Screen.Main -> MainScaffold(
+            viewModel = viewModel,
+            onOpenPersonEditor = { id -> screen = Screen.PersonEdit(id) }
+        )
+
+        is Screen.PersonEdit -> AddEditPersonScreen(
+            viewModel = viewModel,
+            personId = current.personId,
+            onDone = { screen = Screen.Main }
+        )
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainScaffold(viewModel: MainViewModel, navController: NavHostController) {
-    val innerNav = rememberNavController()
+fun MainScaffold(viewModel: MainViewModel, onOpenPersonEditor: (Long) -> Unit) {
     val config by viewModel.config.collectAsState()
-    val backStack by innerNav.currentBackStackEntryAsState()
-    val currentRoute = backStack?.destination?.route ?: BottomTab.Individuals.route
+    var selectedTab by rememberSaveable { mutableStateOf(0) }
     val snackbarHostState = remember { SnackbarHostState() }
     val message by viewModel.message.collectAsState()
 
@@ -121,18 +102,10 @@ fun MainScaffold(viewModel: MainViewModel, navController: NavHostController) {
         },
         bottomBar = {
             NavigationBar {
-                BottomTab.all.forEach { tab ->
+                BottomTab.all.forEachIndexed { index, tab ->
                     NavigationBarItem(
-                        selected = currentRoute == tab.route,
-                        onClick = {
-                            if (currentRoute != tab.route) {
-                                innerNav.navigate(tab.route) {
-                                    popUpTo(innerNav.graph.startDestinationId) { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            }
-                        },
+                        selected = selectedTab == index,
+                        onClick = { selectedTab = index },
                         icon = { Icon(tab.icon, contentDescription = tab.label) },
                         label = { Text(tab.label) }
                     )
@@ -140,23 +113,13 @@ fun MainScaffold(viewModel: MainViewModel, navController: NavHostController) {
             }
         }
     ) { padding ->
-        NavHost(
-            navController = innerNav,
-            startDestination = BottomTab.Individuals.route,
-            modifier = Modifier.padding(padding)
-        ) {
-            composable(BottomTab.Individuals.route) {
-                PeopleListScreen(viewModel, familiesOnly = false) { id ->
-                    navController.navigate("${Routes.PERSON_EDIT}/$id")
-                }
+        Box(Modifier.fillMaxSize().padding(padding)) {
+            when (selectedTab) {
+                0 -> PeopleListScreen(viewModel, familiesOnly = false, onEdit = onOpenPersonEditor)
+                1 -> PeopleListScreen(viewModel, familiesOnly = true, onEdit = onOpenPersonEditor)
+                2 -> ResidencyScreen(viewModel)
+                else -> SettingsScreen(viewModel)
             }
-            composable(BottomTab.Families.route) {
-                PeopleListScreen(viewModel, familiesOnly = true) { id ->
-                    navController.navigate("${Routes.PERSON_EDIT}/$id")
-                }
-            }
-            composable(BottomTab.Residency.route) { ResidencyScreen(viewModel) }
-            composable(BottomTab.Settings.route) { SettingsScreen(viewModel) }
         }
     }
 }
