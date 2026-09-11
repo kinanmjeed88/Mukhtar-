@@ -82,7 +82,7 @@ fun AddEditPersonScreen(viewModel: MainViewModel, personId: Long, onDone: () -> 
                 modifier = Modifier.fillMaxWidth()
             )
             Spacer(Modifier.height(12.dp))
-            ArabicDateField("تاريخ الميلاد", birthDate.takeIf { it > 0 }) { birthDate = it }
+            ArabicDateField(label = "تاريخ الميلاد", value = birthDate.takeIf { it > 0L }, onValueChange = { birthDate = it })
             Spacer(Modifier.height(8.dp))
             Text(
                 "العمر: ${DateUtils.ageText(birthDate)}",
@@ -113,7 +113,7 @@ fun AddEditPersonScreen(viewModel: MainViewModel, personId: Long, onDone: () -> 
                         modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(Modifier.height(12.dp))
-                    ArabicDateField("مواليد الزوجة", spouseBirthDate.takeIf { it > 0 }) { spouseBirthDate = it }
+                    ArabicDateField(label = "مواليد الزوجة", value = spouseBirthDate.takeIf { it > 0L }, onValueChange = { spouseBirthDate = it })
                     Spacer(Modifier.height(8.dp))
                     Text(
                         "عمر الزوجة: ${DateUtils.ageText(spouseBirthDate)}",

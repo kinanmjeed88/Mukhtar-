@@ -15,8 +15,8 @@ import com.kinan.mukhtar.util.DateUtils
 fun ArabicDateField(
     label: String,
     value: Long?,
-    onValueChange: (Long) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onValueChange: (Long) -> Unit
 ) {
     var show by remember { mutableStateOf(false) }
     val state = rememberDatePickerState(initialSelectedDateMillis = value?.takeIf { it > 0 })
