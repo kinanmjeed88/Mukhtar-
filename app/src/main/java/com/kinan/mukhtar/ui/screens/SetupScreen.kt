@@ -21,6 +21,7 @@ fun SetupScreen(viewModel: MainViewModel, onDone: () -> Unit) {
     var district by rememberSaveable { mutableStateOf("") }
     var region by rememberSaveable { mutableStateOf("") }
     var showError by remember { mutableStateOf(false) }
+    var saving by remember { mutableStateOf(false) }
 
     Surface(Modifier.fillMaxSize()) {
         Column(
@@ -77,12 +78,16 @@ fun SetupScreen(viewModel: MainViewModel, onDone: () -> Unit) {
                     if (governorate.isBlank() || district.isBlank() || region.isBlank()) {
                         showError = true
                     } else {
-                        viewModel.saveConfig(governorate, district, region)
-                        onDone()
+                        saving = true
+                        viewModel.saveConfig(governorate, district, region) {
+                            saving = false
+                            onDone()
+                        }
                     }
                 },
+                enabled = !saving,
                 modifier = Modifier.fillMaxWidth().height(52.dp)
-            ) { Text("حفظ") }
+            ) { Text(if (saving) "جاري الحفظ..." else "حفظ") }
         }
     }
 }

@@ -58,11 +58,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun consumeMessage() { _message.value = null }
     private fun notify(text: String) { _message.value = UiMessage(text) }
 
-    fun saveConfig(governorate: String, district: String, region: String) = viewModelScope.launch {
+    fun saveConfig(
+        governorate: String,
+        district: String,
+        region: String,
+        onSaved: () -> Unit = {}
+    ) = viewModelScope.launch {
         repo.saveConfig(
             AppConfigEntity(1, governorate.trim(), district.trim(), region.trim(), true)
         )
         notify("تم حفظ معلومات المنطقة بنجاح")
+        onSaved()
     }
 
     fun savePerson(person: PersonEntity) = viewModelScope.launch {

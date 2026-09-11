@@ -8,6 +8,7 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -43,28 +44,41 @@ fun AppRoot(viewModel: MainViewModel) {
     val navController = rememberNavController()
     val setupComplete by viewModel.isSetupComplete.collectAsState()
 
-    when (setupComplete) {
-        null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-        else -> NavHost(
-            navController = navController,
-            startDestination = if (setupComplete == true) Routes.MAIN else Routes.SETUP
-        ) {
-            composable(Routes.SETUP) {
-                SetupScreen(viewModel) {
-                    navController.navigate(Routes.MAIN) { popUpTo(Routes.SETUP) { inclusive = true } }
+    // يجب تثبيت وجهة البداية مرة واحدة فقط.
+    // تغييرها بعد إنشاء NavHost يعيد بناء الرسم البياني ويسبب انهيار التطبيق.
+    val startDestination = rememberSaveable { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(setupComplete) {
+        if (startDestination.value == null && setupComplete != null) {
+            startDestination.value = if (setupComplete == true) Routes.MAIN else Routes.SETUP
+        }
+    }
+
+    val start = startDestination.value
+    if (start == null) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+        return
+    }
+
+    NavHost(navController = navController, startDestination = start) {
+        composable(Routes.SETUP) {
+            SetupScreen(viewModel) {
+                navController.navigate(Routes.MAIN) {
+                    popUpTo(Routes.SETUP) { inclusive = true }
+                    launchSingleTop = true
                 }
             }
-            composable(Routes.MAIN) { MainScaffold(viewModel, navController) }
-            composable(
-                route = "${Routes.PERSON_EDIT}/{personId}",
-                arguments = listOf(navArgument("personId") { type = NavType.LongType })
-            ) { entry ->
-                AddEditPersonScreen(
-                    viewModel = viewModel,
-                    personId = entry.arguments?.getLong("personId") ?: 0L,
-                    onDone = { navController.popBackStack() }
-                )
-            }
+        }
+        composable(Routes.MAIN) { MainScaffold(viewModel, navController) }
+        composable(
+            route = "${Routes.PERSON_EDIT}/{personId}",
+            arguments = listOf(navArgument("personId") { type = NavType.LongType })
+        ) { entry ->
+            AddEditPersonScreen(
+                viewModel = viewModel,
+                personId = entry.arguments?.getLong("personId") ?: 0L,
+                onDone = { navController.popBackStack() }
+            )
         }
     }
 }
