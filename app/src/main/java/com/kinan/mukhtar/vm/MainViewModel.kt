@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.kinan.mukhtar.data.AppConfigEntity
 import com.kinan.mukhtar.data.AppDatabase
 import com.kinan.mukhtar.data.AppRepository
+import com.kinan.mukhtar.data.Gender
 import com.kinan.mukhtar.data.PersonEntity
 import com.kinan.mukhtar.util.BackupManager
 import com.kinan.mukhtar.util.NameMatcher
@@ -44,56 +45,52 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val allPersons: StateFlow<List<PersonEntity>> = repo.persons
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val persons: StateFlow<List<PersonEntity>> =
-        combine(repo.persons, _query) { list, q ->
-            if (q.isBlank()) list else list.filter { it.fullName.contains(q.trim(), true) }
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    /** البحث يتم في قاعدة البيانات ويشمل اسم الزوجة */
+    @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
+    val persons: StateFlow<List<PersonEntity>> = _query
+        .debounce(200)
+        .flatMapLatest { repo.searchAll(it.trim()) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val families: StateFlow<List<PersonEntity>> =
-        combine(repo.families, _query) { list, q ->
-            if (q.isBlank()) list else list.filter {
-                it.fullName.contains(q.trim(), true) || (it.spouseName ?: "").contains(q.trim(), true)
-            }
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
+    val families: StateFlow<List<PersonEntity>> = _query
+        .debounce(200)
+        .flatMapLatest { repo.searchFamilies(it.trim()) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    // ==================== فحص تكرار الاسم (Fix 3) ====================
+    // ==================== دليل الهاتف ====================
 
-    /** الاسم الجاري كتابته في شاشة الإضافة/التعديل مع معرّف السجل المستثنى */
-    private data class NameProbe(val name: String, val excludeId: Long)
+    private val _phoneQuery = MutableStateFlow("")
+    val phoneQuery: StateFlow<String> = _phoneQuery.asStateFlow()
+    fun setPhoneQuery(v: String) { _phoneQuery.value = v }
 
-    private val _nameProbe = MutableStateFlow(NameProbe("", 0L))
+    @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
+    val phoneDirectory: StateFlow<List<PersonEntity>> = _phoneQuery
+        .debounce(200)
+        .flatMapLatest { repo.searchPhoneDirectory(it.trim()) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    /** true إذا كان الاسم موجوداً مسبقاً - تحذير فقط ولا يمنع الحفظ */
-    @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
-    val isDuplicateName: StateFlow<Boolean> = _nameProbe
-        .debounce(300)
-        .distinctUntilChanged()
-        .mapLatest { probe ->
-            val name = probe.name.trim()
-            if (name.length < 3) false else repo.isDuplicateName(name, probe.excludeId)
-        }
-        .flowOn(Dispatchers.IO)
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    // ==================== الإحصائيات ====================
 
-    fun checkDuplicateName(name: String, excludeId: Long) {
-        _nameProbe.value = NameProbe(name, excludeId)
+    data class Stats(
+        val total: Int = 0,
+        val families: Int = 0,
+        val males: Int = 0,
+        val females: Int = 0,
+        val withPhone: Int = 0
+    ) {
+        val singles: Int get() = (total - families).coerceAtLeast(0)
     }
 
-    fun resetDuplicateCheck() { _nameProbe.value = NameProbe("", 0L) }
-
-    // ==================== ربط الأبناء تلقائياً (Fix 2) ====================
-
-    /**
-     * يعيد قائمة الأبناء (غير المتزوجين) المرتبطين برب العائلة
-     * عبر مطابقة سلسلة النسب في الاسم الرباعي.
-     */
-    fun childrenOf(father: PersonEntity): StateFlow<List<PersonEntity>> =
-        repo.persons
-            .map { all ->
-                all.filter { !it.isMarried && NameMatcher.isChildOf(it.fullName, father.fullName) }
-                    .sortedBy { it.birthDate }
-            }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val stats: StateFlow<Stats> = combine(
+        repo.countAll,
+        repo.countFamilies,
+        repo.countByGender(Gender.MALE),
+        repo.countByGender(Gender.FEMALE),
+        repo.countWithPhone
+    ) { total, fam, males, females, phones ->
+        Stats(total, fam, males, females, phones)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), Stats())
 
     fun setQuery(value: String) { _query.value = value }
     fun toggleDarkMode(value: Boolean) { _darkMode.value = value }
@@ -101,13 +98,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private fun notify(text: String) { _message.value = UiMessage(text) }
 
     fun saveConfig(
+        mukhtarName: String,
         governorate: String,
         district: String,
         region: String,
         onSaved: () -> Unit = {}
     ) = viewModelScope.launch {
         repo.saveConfig(
-            AppConfigEntity(1, governorate.trim(), district.trim(), region.trim(), true)
+            AppConfigEntity(
+                id = 1,
+                governorate = governorate.trim(),
+                district = district.trim(),
+                region = region.trim(),
+                mukhtarName = mukhtarName.trim(),
+                isSetupComplete = true
+            )
         )
         notify("تم حفظ معلومات المنطقة بنجاح")
         onSaved()

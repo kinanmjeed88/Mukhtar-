@@ -8,6 +8,15 @@ class AppRepository(private val db: AppDatabase) {
     val persons: Flow<List<PersonEntity>> = db.personDao().observeAll()
     val families: Flow<List<PersonEntity>> = db.personDao().observeFamilies()
 
+    fun searchAll(q: String) = db.personDao().searchAll(q)
+    fun searchFamilies(q: String) = db.personDao().searchFamilies(q)
+    fun searchPhoneDirectory(q: String) = db.personDao().searchPhoneDirectory(q)
+
+    val countAll = db.personDao().countAll()
+    val countFamilies = db.personDao().countFamilies()
+    fun countByGender(g: String) = db.personDao().countByGender(g)
+    val countWithPhone = db.personDao().countWithPhone()
+
     suspend fun saveConfig(config: AppConfigEntity) = db.configDao().upsert(config)
     suspend fun currentConfig(): AppConfigEntity? = db.configDao().getConfig()
 

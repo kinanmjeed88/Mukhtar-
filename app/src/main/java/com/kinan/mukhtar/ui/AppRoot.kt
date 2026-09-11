@@ -1,9 +1,15 @@
 package com.kinan.mukhtar.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.Contacts
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
@@ -12,32 +18,33 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import com.kinan.mukhtar.ui.screens.*
 import com.kinan.mukhtar.vm.MainViewModel
+import kotlinx.coroutines.launch
 
-/** شاشات التطبيق - تنقل بسيط بالحالة بدلاً من NavHost المتداخل */
 private sealed interface Screen {
     data object Setup : Screen
     data object Main : Screen
     data class PersonEdit(val personId: Long) : Screen
 }
 
-sealed class BottomTab(val label: String, val icon: ImageVector) {
-    data object Individuals : BottomTab("الأفراد", Icons.Filled.Person)
-    data object Families : BottomTab("العوائل", Icons.Filled.Group)
-    data object Residency : BottomTab("تأييد سكن", Icons.Filled.Description)
-    data object Settings : BottomTab("الإعدادات", Icons.Filled.Settings)
-
-    companion object { val all = listOf(Individuals, Families, Residency, Settings) }
+/** أقسام التطبيق الستة */
+enum class Section(val label: String, val icon: ImageVector) {
+    INDIVIDUALS("الأفراد", Icons.Filled.Person),
+    FAMILIES("العوائل", Icons.Filled.Group),
+    RESIDENCY("تأييد سكن", Icons.Filled.Description),
+    PHONES("أرقام الهواتف", Icons.Filled.Contacts),
+    STATISTICS("الإحصائيات", Icons.Filled.BarChart),
+    SETTINGS("الإعدادات", Icons.Filled.Settings)
 }
 
 @Composable
 fun AppRoot(viewModel: MainViewModel) {
     val setupComplete by viewModel.isSetupComplete.collectAsState()
-
-    // تُحسب مرة واحدة فقط ولا تتغير بعد ذلك
     var screen by remember { mutableStateOf<Screen?>(null) }
 
     LaunchedEffect(setupComplete) {
@@ -70,7 +77,9 @@ fun AppRoot(viewModel: MainViewModel) {
 @Composable
 fun MainScaffold(viewModel: MainViewModel, onOpenPersonEditor: (Long) -> Unit) {
     val config by viewModel.config.collectAsState()
-    var selectedTab by rememberSaveable { mutableStateOf(0) }
+    var section by rememberSaveable { mutableStateOf(Section.INDIVIDUALS) }
+    val drawerState = rememberDrawerState(DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     val message by viewModel.message.collectAsState()
 
@@ -81,45 +90,104 @@ fun MainScaffold(viewModel: MainViewModel, onOpenPersonEditor: (Long) -> Unit) {
         }
     }
 
-    Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Text(
-                        text = config?.headerLine?.takeIf { it.isNotBlank() } ?: "مختار المنطقة",
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        textAlign = TextAlign.Center,
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary
-                )
-            )
-        },
-        bottomBar = {
-            NavigationBar {
-                BottomTab.all.forEachIndexed { index, tab ->
-                    NavigationBarItem(
-                        selected = selectedTab == index,
-                        onClick = { selectedTab = index },
-                        icon = { Icon(tab.icon, contentDescription = tab.label) },
-                        label = { Text(tab.label) }
-                    )
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        drawerContent = {
+            ModalDrawerSheet {
+                DrawerHeader(config?.mukhtarName.orEmpty(), config?.headerLine.orEmpty())
+                Spacer(Modifier.height(8.dp))
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    Section.entries.forEach { item ->
+                        NavigationDrawerItem(
+                            icon = { Icon(item.icon, contentDescription = item.label) },
+                            label = { Text(item.label) },
+                            selected = section == item,
+                            onClick = {
+                                section = item
+                                scope.launch { drawerState.close() }
+                            },
+                            modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                        )
+                    }
                 }
             }
         }
-    ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
-            when (selectedTab) {
-                0 -> PeopleListScreen(viewModel, familiesOnly = false, onEdit = onOpenPersonEditor)
-                1 -> PeopleListScreen(viewModel, familiesOnly = true, onEdit = onOpenPersonEditor)
-                2 -> ResidencyScreen(viewModel)
-                else -> SettingsScreen(viewModel)
+    ) {
+        Scaffold(
+            snackbarHost = { SnackbarHost(snackbarHostState) },
+            topBar = {
+                CenterAlignedTopAppBar(
+                    navigationIcon = {
+                        IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                            Icon(Icons.Filled.Menu, contentDescription = "القائمة")
+                        }
+                    },
+                    title = {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = config?.headerLine?.takeIf { it.isNotBlank() } ?: "مختار المنطقة",
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                textAlign = TextAlign.Center,
+                                style = MaterialTheme.typography.titleSmall
+                            )
+                            Text(
+                                text = section.label,
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                        navigationIconContentColor = MaterialTheme.colorScheme.onPrimary
+                    )
+                )
             }
+        ) { padding ->
+            Box(Modifier.fillMaxSize().padding(padding)) {
+                when (section) {
+                    Section.INDIVIDUALS -> PeopleListScreen(viewModel, false, onOpenPersonEditor)
+                    Section.FAMILIES -> PeopleListScreen(viewModel, true, onOpenPersonEditor)
+                    Section.RESIDENCY -> ResidencyScreen(viewModel)
+                    Section.PHONES -> PhoneDirectoryScreen(viewModel)
+                    Section.STATISTICS -> StatisticsScreen(viewModel)
+                    Section.SETTINGS -> SettingsScreen(viewModel)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DrawerHeader(mukhtarName: String, headerLine: String) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.primaryContainer)
+            .padding(24.dp)
+    ) {
+        Text(
+            "مختار المنطقة",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onPrimaryContainer
+        )
+        if (mukhtarName.isNotBlank()) {
+            Spacer(Modifier.height(6.dp))
+            Text(
+                mukhtarName,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+        }
+        if (headerLine.isNotBlank()) {
+            Spacer(Modifier.height(2.dp))
+            Text(
+                headerLine,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+            )
         }
     }
 }

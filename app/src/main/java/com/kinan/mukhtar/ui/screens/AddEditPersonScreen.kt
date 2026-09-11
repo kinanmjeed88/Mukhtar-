@@ -2,11 +2,13 @@ package com.kinan.mukhtar.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -15,7 +17,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.kinan.mukhtar.data.Gender
 import com.kinan.mukhtar.data.PersonEntity
 import com.kinan.mukhtar.ui.components.ArabicDateField
 import com.kinan.mukhtar.util.DateUtils
@@ -34,6 +38,8 @@ fun AddEditPersonScreen(viewModel: MainViewModel, personId: Long, onDone: () -> 
     var job by rememberSaveable { mutableStateOf("") }
     var spouseJob by rememberSaveable { mutableStateOf("") }
     var notes by rememberSaveable { mutableStateOf("") }
+    var gender by rememberSaveable { mutableStateOf(Gender.MALE) }
+    var phoneNumber by rememberSaveable { mutableStateOf("") }
     var error by remember { mutableStateOf(false) }
     val isDuplicate by viewModel.isDuplicateName.collectAsState()
 
@@ -50,6 +56,8 @@ fun AddEditPersonScreen(viewModel: MainViewModel, personId: Long, onDone: () -> 
                 job = p.job
                 spouseJob = p.spouseJob ?: ""
                 notes = p.notes ?: ""
+                gender = p.gender.ifBlank { Gender.MALE }
+                phoneNumber = p.phoneNumber ?: ""
             }
             loaded = true
         }
@@ -128,6 +136,33 @@ fun AddEditPersonScreen(viewModel: MainViewModel, personId: Long, onDone: () -> 
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.SemiBold
             )
+            Spacer(Modifier.height(14.dp))
+
+            // الجنس - حقل إلزامي
+            Text("الجنس", style = MaterialTheme.typography.labelLarge)
+            Spacer(Modifier.height(6.dp))
+            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                Gender.all.forEachIndexed { index, option ->
+                    SegmentedButton(
+                        selected = gender == option,
+                        onClick = { gender = option },
+                        shape = SegmentedButtonDefaults.itemShape(index, Gender.all.size)
+                    ) { Text(option) }
+                }
+            }
+
+            Spacer(Modifier.height(14.dp))
+            OutlinedTextField(
+                value = phoneNumber,
+                onValueChange = { input -> phoneNumber = input.filter { it.isDigit() || it in "+- " } },
+                label = { Text("رقم الهاتف") },
+                placeholder = { Text("اختياري") },
+                leadingIcon = { Icon(Icons.Filled.Phone, contentDescription = null) },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+
             Spacer(Modifier.height(14.dp))
 
             ElevatedCard(Modifier.fillMaxWidth()) {
@@ -219,7 +254,9 @@ fun AddEditPersonScreen(viewModel: MainViewModel, personId: Long, onDone: () -> 
                             spouseBirthDate = spouseBirthDate.takeIf { it > 0 },
                             job = job.trim(),
                             spouseJob = spouseJob.trim().takeIf { it.isNotBlank() },
-                            notes = notes.trim().takeIf { it.isNotBlank() }
+                            notes = notes.trim().takeIf { it.isNotBlank() },
+                            gender = gender,
+                            phoneNumber = phoneNumber.trim().takeIf { it.isNotBlank() }
                         )
                     )
                     onDone()

@@ -11,10 +11,14 @@ data class AppConfigEntity(
     @ColumnInfo(name = "governorate") val governorate: String = "",
     @ColumnInfo(name = "district") val district: String = "",
     @ColumnInfo(name = "region") val region: String = "",
+    @ColumnInfo(name = "mukhtarName", defaultValue = "") val mukhtarName: String = "",
     @ColumnInfo(name = "isSetupComplete") val isSetupComplete: Boolean = false
 ) {
+    /** سطر العنوان: اسم المختار - المحافظة - القضاء - المنطقة */
     val headerLine: String
-        get() = listOf(governorate, district, region).filter { it.isNotBlank() }.joinToString(" - ")
+        get() = listOf(mukhtarName, governorate, district, region)
+            .filter { it.isNotBlank() }
+            .joinToString(" - ")
 }
 
 /** الأفراد وأرباب العوائل */
@@ -27,9 +31,18 @@ data class PersonEntity(
     val spouseName: String? = null,
     val spouseBirthDate: Long? = null,
     val job: String = "",
+    @ColumnInfo(name = "gender", defaultValue = "ذكر") val gender: String = Gender.MALE,
+    @ColumnInfo(name = "phoneNumber") val phoneNumber: String? = null,
     val spouseJob: String? = null,
     val notes: String? = null
 )
+
+/** قيم الجنس المعتمدة في قاعدة البيانات */
+object Gender {
+    const val MALE = "ذكر"
+    const val FEMALE = "أنثى"
+    val all = listOf(MALE, FEMALE)
+}
 
 object StaticData {
     val iraqiGovernorates = listOf(

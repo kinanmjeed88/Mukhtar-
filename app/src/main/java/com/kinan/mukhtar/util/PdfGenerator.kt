@@ -2,8 +2,12 @@ package com.kinan.mukhtar.util
 
 import android.content.ContentValues
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Color
+import android.graphics.DashPathEffect
 import android.graphics.Paint
+import android.graphics.Rect
 import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
 import android.net.Uri
@@ -15,7 +19,8 @@ import java.io.FileOutputStream
 
 /**
  * توليد مستند A4 (595 x 842 نقطة) لتأييد السكن.
- * يتم الرسم من اليمين إلى اليسار (Paint.Align.RIGHT) لدعم العربية.
+ * يدعم حجم خط متغير، أنماط إطار متعددة، وخلفية صورة من المعرض.
+ * الرسم من اليمين إلى اليسار (Paint.Align.RIGHT) لدعم العربية.
  */
 object PdfGenerator {
 
@@ -27,86 +32,143 @@ object PdfGenerator {
         governorate: String,
         district: String,
         region: String,
+        mukhtarName: String,
         personName: String,
         spouseName: String?,
         job: String,
         notes: String?
-    ): String {
-        val sb = StringBuilder()
-        sb.appendLine("جمهورية العراق")
-        sb.appendLine("محافظة $governorate")
-        sb.appendLine("قضاء / ناحية $district")
-        sb.appendLine("منطقة / حي $region")
-        sb.appendLine()
-        sb.appendLine("مضبطة تأييد سكن")
-        sb.appendLine()
-        sb.appendLine("نحن مختار واختيارية منطقة $region في $district / محافظة $governorate،")
-        sb.appendLine("نشهد ونؤيد بأن المواطن ($personName) من سكنة منطقتنا،")
+    ): String = buildString {
+        appendLine("جمهورية العراق")
+        appendLine("محافظة $governorate")
+        appendLine("قضاء / ناحية $district")
+        appendLine("منطقة / حي $region")
+        appendLine()
+        appendLine("مضبطة تأييد سكن")
+        appendLine()
+        appendLine("نحن مختار واختيارية منطقة $region في $district / محافظة $governorate،")
+        appendLine("نشهد ونؤيد بأن المواطن ($personName) من سكنة منطقتنا،")
         if (!spouseName.isNullOrBlank()) {
-            sb.appendLine("ويسكن مع زوجته ($spouseName) وأفراد عائلته في المنطقة أعلاه.")
+            appendLine("ويسكن مع زوجته ($spouseName) وأفراد عائلته في المنطقة أعلاه.")
         } else {
-            sb.appendLine("ويسكن في المنطقة أعلاه.")
+            appendLine("ويسكن في المنطقة أعلاه.")
         }
-        if (job.isNotBlank()) sb.appendLine("ومهنته: $job.")
-        sb.appendLine()
-        sb.appendLine("وقد جرى تأييدنا هذا بناءً على طلبه لتقديمه إلى الجهات المختصة،")
-        sb.appendLine("دون أدنى مسؤولية على المختار تجاه الحقوق الشرعية والقانونية للغير.")
+        if (job.isNotBlank()) appendLine("ومهنته: $job.")
+        appendLine()
+        appendLine("وقد جرى تأييدنا هذا بناءً على طلبه لتقديمه إلى الجهات المختصة،")
+        appendLine("دون أدنى مسؤولية على المختار تجاه الحقوق الشرعية والقانونية للغير.")
         if (!notes.isNullOrBlank()) {
-            sb.appendLine()
-            sb.appendLine("ملاحظات: $notes")
+            appendLine()
+            appendLine("ملاحظات: $notes")
         }
-        sb.appendLine()
-        sb.appendLine("التاريخ: ${DateUtils.todayFormatted()}")
-        sb.appendLine()
-        sb.appendLine("مختار منطقة $region")
-        sb.appendLine("التوقيع والختم: ..............................")
-        return sb.toString()
+        appendLine()
+        appendLine("التاريخ: ${DateUtils.todayFormatted()}")
+        appendLine()
+        appendLine("مختار منطقة $region")
+        if (mukhtarName.isNotBlank()) appendLine("الاسم: $mukhtarName")
+        appendLine("التوقيع والختم: ..............................")
     }
 
-    /** يرسم النص على صفحة A4 ويعيد المستند */
-    fun render(text: String, title: String = "مضبطة تأييد سكن"): PdfDocument {
+    /** يرسم النص على صفحة A4 وفق النمط المحدد */
+    fun render(
+        context: Context,
+        text: String,
+        style: DocumentStyle,
+        title: String = "مضبطة تأييد سكن"
+    ): PdfDocument {
         val doc = PdfDocument()
         val pageInfo = PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, 1).create()
         val page = doc.startPage(pageInfo)
         val canvas = page.canvas
 
-        val border = Paint().apply {
-            style = Paint.Style.STROKE
-            strokeWidth = 1.5f
-            color = Color.rgb(15, 81, 50)
+        // 1) خلفية الصورة تُرسم أولاً خلف كل شيء
+        if (style.border == BorderStyle.IMAGE && style.backgroundUri != null) {
+            loadBitmap(context, style.backgroundUri)?.let { bmp ->
+                canvas.drawBitmap(
+                    bmp,
+                    null,
+                    Rect(0, 0, PAGE_WIDTH, PAGE_HEIGHT),
+                    Paint(Paint.FILTER_BITMAP_FLAG)
+                )
+                bmp.recycle()
+            }
+        } else {
+            drawBorder(canvas, style.border)
         }
-        canvas.drawRect(24f, 24f, PAGE_WIDTH - 24f, PAGE_HEIGHT - 24f, border)
 
+        // 2) النص
         val titlePaint = Paint().apply {
             isAntiAlias = true
             color = Color.BLACK
-            textSize = 20f
+            textSize = style.fontSize + 6f
             textAlign = Paint.Align.CENTER
             typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD)
         }
         val bodyPaint = Paint().apply {
             isAntiAlias = true
             color = Color.BLACK
-            textSize = 14f
+            textSize = style.fontSize
             textAlign = Paint.Align.RIGHT
             typeface = Typeface.create(Typeface.SERIF, Typeface.NORMAL)
         }
 
-        canvas.drawText(title, PAGE_WIDTH / 2f, 70f, titlePaint)
+        canvas.drawText(title, PAGE_WIDTH / 2f, MARGIN + style.fontSize + 14f, titlePaint)
 
-        var y = 110f
+        val lineHeight = style.fontSize * 1.7f
+        var y = MARGIN + (style.fontSize * 3f)
         val right = PAGE_WIDTH - MARGIN
         val maxWidth = PAGE_WIDTH - (MARGIN * 2)
+
         text.split("\n").forEach { line ->
             wrap(line, bodyPaint, maxWidth).forEach { part ->
-                if (y > PAGE_HEIGHT - MARGIN) return@forEach
-                canvas.drawText(part, right, y, bodyPaint)
-                y += 24f
+                if (y <= PAGE_HEIGHT - MARGIN) {
+                    canvas.drawText(part, right, y, bodyPaint)
+                    y += lineHeight
+                }
             }
         }
+
         doc.finishPage(page)
         return doc
     }
+
+    private fun drawBorder(canvas: android.graphics.Canvas, border: BorderStyle) {
+        if (border == BorderStyle.NONE || border == BorderStyle.IMAGE) return
+
+        val stroke = Paint().apply {
+            style = Paint.Style.STROKE
+            isAntiAlias = true
+            strokeWidth = 2f
+            color = Color.rgb(15, 81, 50)
+        }
+
+        val outer = 22f
+        when (border) {
+            BorderStyle.SINGLE ->
+                canvas.drawRect(outer, outer, PAGE_WIDTH - outer, PAGE_HEIGHT - outer, stroke)
+
+            BorderStyle.DOUBLE -> {
+                canvas.drawRect(outer, outer, PAGE_WIDTH - outer, PAGE_HEIGHT - outer, stroke)
+                val inner = outer + 7f
+                canvas.drawRect(inner, inner, PAGE_WIDTH - inner, PAGE_HEIGHT - inner, stroke)
+            }
+
+            BorderStyle.SOLID_DASHED -> {
+                canvas.drawRect(outer, outer, PAGE_WIDTH - outer, PAGE_HEIGHT - outer, stroke)
+                val dashed = Paint(stroke).apply {
+                    strokeWidth = 1.5f
+                    pathEffect = DashPathEffect(floatArrayOf(10f, 6f), 0f)
+                }
+                val inner = outer + 8f
+                canvas.drawRect(inner, inner, PAGE_WIDTH - inner, PAGE_HEIGHT - inner, dashed)
+            }
+
+            else -> Unit
+        }
+    }
+
+    private fun loadBitmap(context: Context, uri: Uri): Bitmap? = runCatching {
+        context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }
+    }.getOrNull()
 
     private fun wrap(line: String, paint: Paint, maxWidth: Float): List<String> {
         if (line.isBlank()) return listOf(" ")
@@ -127,8 +189,13 @@ object PdfGenerator {
     }
 
     /** حفظ الملف في مجلد التنزيلات عبر MediaStore */
-    fun saveToDownloads(context: Context, text: String, fileName: String): Uri? {
-        val doc = render(text)
+    fun saveToDownloads(
+        context: Context,
+        text: String,
+        style: DocumentStyle,
+        fileName: String
+    ): Uri? {
+        val doc = render(context, text, style)
         return try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 val values = ContentValues().apply {
@@ -137,7 +204,8 @@ object PdfGenerator {
                     put(MediaStore.Downloads.IS_PENDING, 1)
                 }
                 val resolver = context.contentResolver
-                val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values) ?: return null
+                val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                    ?: return null
                 resolver.openOutputStream(uri)?.use { doc.writeTo(it) }
                 values.clear()
                 values.put(MediaStore.Downloads.IS_PENDING, 0)
@@ -156,12 +224,4 @@ object PdfGenerator {
             doc.close()
         }
     }
-
-    /** كتابة المستند إلى Uri مختار عبر SAF */
-    fun writeToUri(context: Context, uri: Uri, text: String): Boolean = try {
-        val doc = render(text)
-        context.contentResolver.openOutputStream(uri)?.use { doc.writeTo(it) }
-        doc.close()
-        true
-    } catch (e: Exception) { false }
 }

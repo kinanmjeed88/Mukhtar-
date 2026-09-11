@@ -17,6 +17,7 @@ import com.kinan.mukhtar.vm.MainViewModel
 
 @Composable
 fun SetupScreen(viewModel: MainViewModel, onDone: () -> Unit) {
+    var mukhtarName by rememberSaveable { mutableStateOf("") }
     var governorate by rememberSaveable { mutableStateOf("") }
     var district by rememberSaveable { mutableStateOf("") }
     var region by rememberSaveable { mutableStateOf("") }
@@ -47,6 +48,14 @@ fun SetupScreen(viewModel: MainViewModel, onDone: () -> Unit) {
             )
             Spacer(Modifier.height(28.dp))
 
+            OutlinedTextField(
+                value = mukhtarName,
+                onValueChange = { mukhtarName = it },
+                label = { Text("اسم المختار") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(Modifier.height(14.dp))
             GovernorateDropdown(
                 value = governorate,
                 onValueChange = { governorate = it },
@@ -75,11 +84,11 @@ fun SetupScreen(viewModel: MainViewModel, onDone: () -> Unit) {
             Spacer(Modifier.height(24.dp))
             Button(
                 onClick = {
-                    if (governorate.isBlank() || district.isBlank() || region.isBlank()) {
+                    if (mukhtarName.isBlank() || governorate.isBlank() || district.isBlank() || region.isBlank()) {
                         showError = true
                     } else {
                         saving = true
-                        viewModel.saveConfig(governorate, district, region) {
+                        viewModel.saveConfig(mukhtarName, governorate, district, region) {
                             saving = false
                             onDone()
                         }

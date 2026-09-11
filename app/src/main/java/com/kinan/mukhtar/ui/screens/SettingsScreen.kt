@@ -84,11 +84,15 @@ fun SettingsScreen(viewModel: MainViewModel) {
 
     if (showRegionDialog) {
         EditRegionDialog(
+            initialMukhtar = config?.mukhtarName ?: "",
             initialGovernorate = config?.governorate ?: "",
             initialDistrict = config?.district ?: "",
             initialRegion = config?.region ?: "",
             onDismiss = { showRegionDialog = false },
-            onSave = { g, d, r -> viewModel.saveConfig(g, d, r); showRegionDialog = false }
+            onSave = { m, g, d, r ->
+                viewModel.saveConfig(m, g, d, r)
+                showRegionDialog = false
+            }
         )
     }
 
@@ -114,12 +118,14 @@ private fun SettingRow(icon: ImageVector, title: String, subtitle: String, onCli
 
 @Composable
 private fun EditRegionDialog(
+    initialMukhtar: String,
     initialGovernorate: String,
     initialDistrict: String,
     initialRegion: String,
     onDismiss: () -> Unit,
-    onSave: (String, String, String) -> Unit
+    onSave: (String, String, String, String) -> Unit
 ) {
+    var m by remember { mutableStateOf(initialMukhtar) }
     var g by remember { mutableStateOf(initialGovernorate) }
     var d by remember { mutableStateOf(initialDistrict) }
     var r by remember { mutableStateOf(initialRegion) }
@@ -128,7 +134,14 @@ private fun EditRegionDialog(
         onDismissRequest = onDismiss,
         title = { Text("تعديل معلومات المنطقة") },
         text = {
-            Column {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                OutlinedTextField(
+                    value = m,
+                    onValueChange = { m = it },
+                    label = { Text("اسم المختار") },
+                    singleLine = true
+                )
+                Spacer(Modifier.height(10.dp))
                 GovernorateDropdown(value = g, onValueChange = { g = it })
                 Spacer(Modifier.height(10.dp))
                 OutlinedTextField(value = d, onValueChange = { d = it }, label = { Text("القضاء / الناحية") })
@@ -138,7 +151,11 @@ private fun EditRegionDialog(
         },
         confirmButton = {
             TextButton(
-                onClick = { if (g.isNotBlank() && d.isNotBlank() && r.isNotBlank()) onSave(g, d, r) }
+                onClick = {
+                    if (m.isNotBlank() && g.isNotBlank() && d.isNotBlank() && r.isNotBlank()) {
+                        onSave(m, g, d, r)
+                    }
+                }
             ) { Text("حفظ") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("إلغاء") } }
