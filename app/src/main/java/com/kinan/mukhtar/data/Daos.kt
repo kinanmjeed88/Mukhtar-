@@ -26,6 +26,10 @@ interface PersonDao {
     @Query("SELECT * FROM persons WHERE isMarried = 1 ORDER BY fullName ASC")
     fun observeFamilies(): Flow<List<PersonEntity>>
 
+    /** فحص التكرار: يستثني السجل الجاري تعديله */
+    @Query("SELECT COUNT(*) FROM persons WHERE TRIM(fullName) = TRIM(:name) AND id != :excludeId")
+    suspend fun countByExactName(name: String, excludeId: Long): Int
+
     @Query("SELECT * FROM persons WHERE id = :id LIMIT 1")
     suspend fun getById(id: Long): PersonEntity?
 

@@ -23,6 +23,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.kinan.mukhtar.ui.components.BrandIcons
 import com.kinan.mukhtar.vm.MainViewModel
 
 @Composable
@@ -149,56 +150,142 @@ fun AboutDeveloperDialog(onDismiss: () -> Unit) {
     val context = LocalContext.current
 
     fun open(url: String) {
-        if (url.isBlank()) return
         runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
     }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("حول مطور التطبيق", textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
+        shape = MaterialTheme.shapes.extraLarge,
+        tonalElevation = 6.dp,
+        title = {
+            Text(
+                "حول مطور التطبيق",
+                style = MaterialTheme.typography.titleLarge,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
+        },
         text = {
             Column(
                 Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text("المطور", style = MaterialTheme.typography.labelLarge)
-                Spacer(Modifier.height(6.dp))
-                Text("كنان الصائغ", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                Text("Kinan Al-Sayegh", style = MaterialTheme.typography.bodyMedium)
-                Spacer(Modifier.height(10.dp))
-                Text(
-                    "التطبيق حالياً مجاني - نسخة تجريبية",
-                    style = MaterialTheme.typography.bodyMedium,
-                    textAlign = TextAlign.Center
-                )
-                Spacer(Modifier.height(16.dp))
-                HorizontalDivider()
-                Spacer(Modifier.height(12.dp))
-                Text("للتواصل", style = MaterialTheme.typography.titleSmall)
-                Spacer(Modifier.height(12.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    SocialIcon(Icons.Filled.Send, Color(0xFF29A9EB), "تيليجرام") {
-                        open("https://t.me/techtouch7")
+                // الحرف الأول داخل دائرة متدرجة
+                Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    tonalElevation = 4.dp,
+                    modifier = Modifier.size(84.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            "ك",
+                            style = MaterialTheme.typography.displaySmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
                     }
-                    SocialIcon(Icons.Filled.PlayArrow, Color(0xFFFF0000), "يوتيوب") {
-                        open("https://youtube.com/@kinanmajeed?si=I2yuzJT2rRnEHLVg")
-                    }
-                    SocialIcon(Icons.Filled.Facebook, Color(0xFF1877F2), "فيسبوك") { open("") }
-                    SocialIcon(Icons.Filled.MusicNote, Color(0xFF010101), "تيك توك") { open("") }
-                    SocialIcon(Icons.Filled.CameraAlt, Color(0xFFE1306C), "إنستغرام") { open("") }
                 }
+
+                Spacer(Modifier.height(18.dp))
+
+                Text(
+                    "المطور",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "كنان الصائغ",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    "Kinan Al-Sayegh",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(Modifier.height(16.dp))
+
+                Surface(
+                    shape = MaterialTheme.shapes.medium,
+                    color = MaterialTheme.colorScheme.secondaryContainer
+                ) {
+                    Text(
+                        "التطبيق حالياً مجاني - نسخة تجريبية",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                }
+
+                Spacer(Modifier.height(22.dp))
+                HorizontalDivider(Modifier.fillMaxWidth(0.5f))
+                Spacer(Modifier.height(16.dp))
+
+                Text(
+                    "للتواصل",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(Modifier.height(14.dp))
+
+                Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                    BrandButton(
+                        icon = BrandIcons.Telegram,
+                        brandColor = Color(0xFF229ED9),
+                        label = "تيليجرام"
+                    ) { open("https://t.me/techtouch7") }
+
+                    BrandButton(
+                        icon = BrandIcons.YouTube,
+                        brandColor = Color(0xFFFF0000),
+                        label = "يوتيوب"
+                    ) { open("https://youtube.com/@kinanmajeed?si=I2yuzJT2rRnEHLVg") }
+                }
+
+                Spacer(Modifier.height(8.dp))
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("إغلاق") } }
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("إغلاق", style = MaterialTheme.typography.labelLarge)
+            }
+        }
     )
 }
 
 @Composable
-private fun SocialIcon(icon: ImageVector, color: Color, desc: String, onClick: () -> Unit) {
-    Box(
-        Modifier.size(44.dp).clip(CircleShape).background(color).clickable { onClick() },
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(icon, contentDescription = desc, tint = Color.White)
+private fun BrandButton(
+    icon: ImageVector,
+    brandColor: Color,
+    label: String,
+    onClick: () -> Unit
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Surface(
+            shape = CircleShape,
+            color = brandColor,
+            shadowElevation = 4.dp,
+            modifier = Modifier.size(54.dp).clickable(onClick = onClick)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = label,
+                    tint = Color.White,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }

@@ -16,6 +16,8 @@ class AppRepository(private val db: AppDatabase) {
     suspend fun updatePerson(person: PersonEntity) = db.personDao().update(person)
     suspend fun deletePerson(person: PersonEntity) = db.personDao().delete(person)
     suspend fun personById(id: Long) = db.personDao().getById(id)
+    suspend fun isDuplicateName(name: String, excludeId: Long) =
+        db.personDao().countByExactName(name, excludeId) > 0
     suspend fun allPersonsOnce() = db.personDao().getAllOnce()
 
     suspend fun replaceAll(config: AppConfigEntity?, people: List<PersonEntity>) {

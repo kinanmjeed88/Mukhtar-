@@ -1,16 +1,19 @@
 package com.kinan.mukhtar.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.kinan.mukhtar.data.PersonEntity
@@ -32,6 +35,9 @@ fun AddEditPersonScreen(viewModel: MainViewModel, personId: Long, onDone: () -> 
     var spouseJob by rememberSaveable { mutableStateOf("") }
     var notes by rememberSaveable { mutableStateOf("") }
     var error by remember { mutableStateOf(false) }
+    val isDuplicate by viewModel.isDuplicateName.collectAsState()
+
+    DisposableEffect(Unit) { onDispose { viewModel.resetDuplicateCheck() } }
 
     LaunchedEffect(personId) {
         if (personId != 0L) {
@@ -77,10 +83,43 @@ fun AddEditPersonScreen(viewModel: MainViewModel, personId: Long, onDone: () -> 
         ) {
             OutlinedTextField(
                 value = fullName,
-                onValueChange = { fullName = it },
+                onValueChange = {
+                    fullName = it
+                    error = false
+                    viewModel.checkDuplicateName(it, personId)
+                },
                 label = { Text("الاسم الرباعي مع اللقب") },
+                isError = isDuplicate,
+                singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
+
+            // تحذير غير معطِّل - زر الحفظ يبقى مفعلاً
+            AnimatedVisibility(visible = isDuplicate) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp)
+                        .clip(MaterialTheme.shapes.small)
+                        .background(MaterialTheme.colorScheme.errorContainer)
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Filled.Warning,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "تنبيه: هذا الاسم موجود مسبقاً",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                }
+            }
+
             Spacer(Modifier.height(12.dp))
             ArabicDateField(label = "تاريخ الميلاد", value = birthDate.takeIf { it > 0L }, onValueChange = { birthDate = it })
             Spacer(Modifier.height(8.dp))
@@ -124,15 +163,16 @@ fun AddEditPersonScreen(viewModel: MainViewModel, personId: Long, onDone: () -> 
             }
 
             Spacer(Modifier.height(14.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedTextField(
-                    value = job,
-                    onValueChange = { job = it },
-                    label = { Text("مهنة الزوج") },
-                    singleLine = true,
-                    modifier = Modifier.weight(1f)
-                )
-                if (isMarried) {
+            // الحقول تتغير ديناميكياً حسب الحالة الزوجية
+            if (isMarried) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(
+                        value = job,
+                        onValueChange = { job = it },
+                        label = { Text("مهنة الزوج") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f)
+                    )
                     OutlinedTextField(
                         value = spouseJob,
                         onValueChange = { spouseJob = it },
@@ -141,6 +181,14 @@ fun AddEditPersonScreen(viewModel: MainViewModel, personId: Long, onDone: () -> 
                         modifier = Modifier.weight(1f)
                     )
                 }
+            } else {
+                OutlinedTextField(
+                    value = job,
+                    onValueChange = { job = it },
+                    label = { Text("المهنة") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
 
             Spacer(Modifier.height(14.dp))

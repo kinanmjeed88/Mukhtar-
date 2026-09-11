@@ -10,6 +10,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -79,7 +80,7 @@ fun PeopleListScreen(
 
     detail?.let { person ->
         ModalBottomSheet(onDismissRequest = { detail = null }) {
-            PersonDetails(person)
+            PersonDetails(person = person, viewModel = viewModel, showChildren = familiesOnly)
         }
     }
 
@@ -129,7 +130,11 @@ private fun PersonCard(
 }
 
 @Composable
-fun PersonDetails(person: PersonEntity) {
+fun PersonDetails(
+    person: PersonEntity,
+    viewModel: MainViewModel,
+    showChildren: Boolean
+) {
     Column(
         Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp)
     ) {
@@ -150,6 +155,60 @@ fun PersonDetails(person: PersonEntity) {
         }
         HorizontalDivider(Modifier.padding(vertical = 10.dp))
         DetailRow("الملاحظات", person.notes?.ifBlank { "لا توجد" } ?: "لا توجد")
+
+        // قسم الأبناء - يظهر في شاشة العوائل فقط
+        if (showChildren && person.isMarried) {
+            val children by remember(person.id, person.fullName) {
+                viewModel.childrenOf(person)
+            }.collectAsState()
+
+            HorizontalDivider(Modifier.padding(vertical = 10.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("الأبناء", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.width(8.dp))
+                Badge { Text(children.size.toString()) }
+            }
+            Spacer(Modifier.height(8.dp))
+
+            if (children.isEmpty()) {
+                Text(
+                    "لا يوجد أبناء مسجلون تحت هذا الاسم",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                children.forEach { child ->
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        ),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                    ) {
+                        Row(
+                            Modifier.fillMaxWidth().padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Filled.Person,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(child.fullName, style = MaterialTheme.typography.bodyMedium)
+                                Text(
+                                    DateUtils.ageText(child.birthDate),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         Spacer(Modifier.height(24.dp))
     }
 }

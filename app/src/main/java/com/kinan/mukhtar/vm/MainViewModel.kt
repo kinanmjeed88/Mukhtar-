@@ -10,7 +10,10 @@ import com.kinan.mukhtar.data.AppDatabase
 import com.kinan.mukhtar.data.AppRepository
 import com.kinan.mukhtar.data.PersonEntity
 import com.kinan.mukhtar.util.BackupManager
+import com.kinan.mukhtar.util.NameMatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -53,6 +56,45 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    // ==================== فحص تكرار الاسم (Fix 3) ====================
+
+    /** الاسم الجاري كتابته في شاشة الإضافة/التعديل مع معرّف السجل المستثنى */
+    private data class NameProbe(val name: String, val excludeId: Long)
+
+    private val _nameProbe = MutableStateFlow(NameProbe("", 0L))
+
+    /** true إذا كان الاسم موجوداً مسبقاً - تحذير فقط ولا يمنع الحفظ */
+    @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
+    val isDuplicateName: StateFlow<Boolean> = _nameProbe
+        .debounce(300)
+        .distinctUntilChanged()
+        .mapLatest { probe ->
+            val name = probe.name.trim()
+            if (name.length < 3) false else repo.isDuplicateName(name, probe.excludeId)
+        }
+        .flowOn(Dispatchers.IO)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    fun checkDuplicateName(name: String, excludeId: Long) {
+        _nameProbe.value = NameProbe(name, excludeId)
+    }
+
+    fun resetDuplicateCheck() { _nameProbe.value = NameProbe("", 0L) }
+
+    // ==================== ربط الأبناء تلقائياً (Fix 2) ====================
+
+    /**
+     * يعيد قائمة الأبناء (غير المتزوجين) المرتبطين برب العائلة
+     * عبر مطابقة سلسلة النسب في الاسم الرباعي.
+     */
+    fun childrenOf(father: PersonEntity): StateFlow<List<PersonEntity>> =
+        repo.persons
+            .map { all ->
+                all.filter { !it.isMarried && NameMatcher.isChildOf(it.fullName, father.fullName) }
+                    .sortedBy { it.birthDate }
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     fun setQuery(value: String) { _query.value = value }
     fun toggleDarkMode(value: Boolean) { _darkMode.value = value }
     fun consumeMessage() { _message.value = null }
@@ -72,7 +114,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun savePerson(person: PersonEntity) = viewModelScope.launch {
-        val clean = if (person.isMarried) person else person.copy(
+        val normalized = person.copy(
+            fullName = person.fullName.trim().replace(Regex("\\s+"), " "),
+            job = person.job.trim()
+        )
+        // عند العزوبية تُمسح كل حقول الزوجة بما فيها مهنتها
+        val clean = if (normalized.isMarried) normalized.copy(
+            spouseName = normalized.spouseName?.trim()?.replace(Regex("\\s+"), " ")?.takeIf { it.isNotBlank() },
+            spouseJob = normalized.spouseJob?.trim()?.takeIf { it.isNotBlank() }
+        ) else normalized.copy(
             spouseName = null, spouseBirthDate = null, spouseJob = null
         )
         if (clean.id == 0L) repo.addPerson(clean) else repo.updatePerson(clean)
