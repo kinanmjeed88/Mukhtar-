@@ -92,6 +92,41 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         Stats(total, fam, males, females, phones)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), Stats())
 
+    // ==================== فحص تكرار الاسم ====================
+
+    private data class NameProbe(val name: String, val excludeId: Long)
+
+    private val _nameProbe = MutableStateFlow(NameProbe("", 0L))
+
+    /** true إذا كان الاسم موجوداً مسبقاً - تحذير فقط ولا يمنع الحفظ */
+    @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
+    val isDuplicateName: StateFlow<Boolean> = _nameProbe
+        .debounce(300)
+        .distinctUntilChanged()
+        .mapLatest { probe ->
+            val name = probe.name.trim()
+            if (name.length < 3) false else repo.isDuplicateName(name, probe.excludeId)
+        }
+        .flowOn(Dispatchers.IO)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    fun checkDuplicateName(name: String, excludeId: Long) {
+        _nameProbe.value = NameProbe(name, excludeId)
+    }
+
+    fun resetDuplicateCheck() { _nameProbe.value = NameProbe("", 0L) }
+
+    // ==================== ربط الأبناء تلقائياً ====================
+
+    /** أبناء رب العائلة عبر مطابقة سلسلة النسب في الاسم الرباعي */
+    fun childrenOf(father: PersonEntity): StateFlow<List<PersonEntity>> =
+        repo.persons
+            .map { all ->
+                all.filter { !it.isMarried && NameMatcher.isChildOf(it.fullName, father.fullName) }
+                    .sortedBy { it.birthDate }
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     fun setQuery(value: String) { _query.value = value }
     fun toggleDarkMode(value: Boolean) { _darkMode.value = value }
     fun consumeMessage() { _message.value = null }
